@@ -18,7 +18,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 // Middleware
-app.use(express.json({ limit: '10mb' })); // Increase limit for large requests
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Logging utility
