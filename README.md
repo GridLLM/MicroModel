@@ -27,7 +27,7 @@ npm run dev
 
 ## Usage
 
-Send requests to `http://localhost:3004/v1/completions` with a `workflow_id`. This will capture the prompt and completion of the model:
+Send requests to `http://localhost:36830/v1/completions` with a `workflow_id`. This will capture the prompt and completion of the model:
 
 ```json
 {
