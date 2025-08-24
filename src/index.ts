@@ -88,7 +88,7 @@ const startServers = () => {
       console.log(`OpenAI Proxy Server is running on port ${config.PORT}`);
       console.log(`Workflow ID: ${workflowId}`);
       console.log(`Forwarding requests to: ${config.OPENAI_API_HOST}`);
-      console.log(`API Key: ${config.API_KEY ? '***configured***' : 'not set'}`);
+      console.log(`API Key: ${config.API_KEY ? 'SET' : 'NOT SET'}`);
       console.log('='.repeat(60));
     });
 
