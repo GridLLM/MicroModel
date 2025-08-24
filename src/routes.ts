@@ -30,20 +30,33 @@ const logRequestResponse = (prompt: any, response: any, endpoint: string, workfl
       workflow_id: workflowId || 'default'
     };
 
-    // Create workflow-specific directory
+    // Create date-based folder structure
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const dateFolder = `${day}-${month}-${year}`;
+
+    // Create workflow-specific directory with date subfolder
     const workflowDir = workflowId 
       ? path.join(dataDir, workflowId)
       : path.join(dataDir, 'default');
     
+    const datePath = path.join(workflowDir, dateFolder);
+    
     if (!fs.existsSync(workflowDir)) {
       fs.mkdirSync(workflowDir, { recursive: true });
     }
+    
+    if (!fs.existsSync(datePath)) {
+      fs.mkdirSync(datePath, { recursive: true });
+    }
 
     const jsonlLine = JSON.stringify(chatMLEntry) + '\n';
-    const filePath = path.join(workflowDir, 'data.jsonl');
+    const filePath = path.join(datePath, 'data.jsonl');
     
     fs.appendFileSync(filePath, jsonlLine);
-    console.log(`Saved conversation to ${filePath} (workflow: ${workflowId || 'default'})`);
+    console.log(`Saved conversation to ${filePath} (workflow: ${workflowId || 'default'}, date: ${dateFolder})`);
   } catch (error) {
     console.error('Error saving conversation:', error);
   }

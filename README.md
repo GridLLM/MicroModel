@@ -1,12 +1,9 @@
 # MicroModel
 
-A simple proxy server that forwards OpenAI API requests and automatically saves conversations as training data in ChatML format. 
+A simple proxy server that forwards OpenAI API requests and automatically saves conversations as training data in ChatML format. Now supports per-workflow configuration with individual API hosts, keys, and ports.
 
 > [!NOTE]  
 > Currently only supports the `/v1/completions` endpoint.
-
-> [!IMPORTANT]  
-> Now supports per-workflow configuration with individual API hosts, keys, and ports.
 
 ## Quick Start
 
@@ -119,9 +116,31 @@ You can override the automatic workflow assignment by including `workflow_id` in
 
 ## Data Collection
 
-Conversations are automatically saved in ChatML format:
-- Location: `data/${workflow_id}/data.jsonl`
+Conversations are automatically saved in ChatML format with automatic date-based organization:
+- Location: `data/${workflow_id}/${dd-mm-yyyy}/data.jsonl`
 - Each workflow gets its own data directory
+- Each day gets its own subfolder in DD-MM-YYYY format
+
+### Folder Structure
+The system automatically creates a date-based folder structure for easy data aggregation:
+```
+data/
+├── custom_workflow/
+│   ├── 24-08-2025/
+│   │   └── data.jsonl
+│   ├── 25-08-2025/
+│   │   └── data.jsonl
+│   └── 26-08-2025/
+│       └── data.jsonl
+├── local_llama/
+│   ├── 24-08-2025/
+│   │   └── data.jsonl
+│   └── 25-08-2025/
+│       └── data.jsonl
+└── default/
+    └── 24-08-2025/
+        └── data.jsonl
+```
 
 Each saved conversation looks like:
 ```json
