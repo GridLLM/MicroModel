@@ -96,8 +96,7 @@ const createApp = (workflowId: string): Application => {
       delete forwardBody.workflow_id;
       
       // Log the incoming request
-      console.log(`[Port mapping] Proxying request to ${OPENAI_API_BASE_URL}/v1/completions`);
-      console.log(`[Port mapping] Workflow ID: ${finalWorkflowId}`);
+      console.log(`Proxying request to ${OPENAI_API_BASE_URL}/v1/completions for ${finalWorkflowId}`);
       
       // Forward request to OpenAI API
       const controller = new AbortController();
@@ -119,7 +118,7 @@ const createApp = (workflowId: string): Application => {
             'Content-Type': 'application/json',
             ...forwardHeaders
           },
-          body: JSON.stringify(forwardBody), // Use cleaned body without workflow_id
+          body: JSON.stringify(forwardBody),
           signal: controller.signal
         }
       );
@@ -195,9 +194,11 @@ const startServers = () => {
     // Start default server
     const defaultApp = createApp('default');
     const defaultServer = defaultApp.listen(3000, () => {
+      console.log('='.repeat(60));
       console.log('Default OpenAI Proxy Server is running on port 3000');
       console.log(`Forwarding requests to: ${OPENAI_API_BASE_URL}`);
       console.log('Default workflow_id: default');
+      console.log('='.repeat(60));
     });
     
     setupErrorHandling(defaultServer, 3000);
@@ -212,9 +213,11 @@ const startServers = () => {
     const app = createApp(workflowId);
     
     const server = app.listen(port, () => {
+      console.log('='.repeat(60));
       console.log(`OpenAI Proxy Server is running on port ${port}`);
       console.log(`Workflow ID: ${workflowId}`);
       console.log(`Forwarding requests to: ${OPENAI_API_BASE_URL}`);
+      console.log('='.repeat(60));
     });
 
     setupErrorHandling(server, port);
