@@ -1,7 +1,10 @@
 import { Application, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
 
+// Load environment variables from ../.env if not found
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com';
 
 // Ensure data directory exists

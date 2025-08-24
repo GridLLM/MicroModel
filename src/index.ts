@@ -4,11 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import { setupRoutes } from './routes';
 
-// Load environment variables
-dotenv.config();
-
-const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Load environment variables from ../.env if not found
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL;
 
 // Load mappings from mappings.json
 const loadMappings = (): { [key: string]: number } => {
@@ -73,10 +71,6 @@ const startServers = () => {
 
     setupErrorHandling(server, port);
   });
-
-  if (!OPENAI_API_KEY) {
-    console.warn('Warning: OPENAI_API_KEY not set in environment variables');
-  }
 };
 
 // Setup error handling for a server
