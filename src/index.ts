@@ -21,15 +21,6 @@ const loadMappings = (): { [key: string]: number } => {
   }
 };
 
-// Create reverse mapping: port -> workflow_id
-const createPortToWorkflowMapping = (mappings: { [key: string]: number }): { [port: number]: string } => {
-  const reverseMap: { [port: number]: string } = {};
-  Object.entries(mappings).forEach(([workflowId, port]) => {
-    reverseMap[port] = workflowId;
-  });
-  return reverseMap;
-};
-
 // Ensure data directory exists
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) {
@@ -187,8 +178,7 @@ const createApp = (workflowId: string): Application => {
 // Main function to start all servers
 const startServers = () => {
   const mappings = loadMappings();
-  const portToWorkflowMapping = createPortToWorkflowMapping(mappings);
-  
+
   if (Object.keys(mappings).length === 0) {
     console.warn('No mappings found in mappings.json. Starting default server on port 3000.');
     // Start default server
