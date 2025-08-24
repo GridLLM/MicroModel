@@ -1,35 +1,53 @@
 import express, { Application } from 'express';
-import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { setupRoutes } from './routes';
+import { WorkflowMappings, WorkflowConfig } from './types';
 
-// Load environment variables from ../.env if not found
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
-const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL;
-
-// Load mappings from mappings.json
-const loadMappings = (): { [key: string]: number } => {
+// Load mappings from config.json
+const loadMappings = (): WorkflowMappings => {
   try {
-    const mappingsPath = path.join(__dirname, '..', 'mappings.json');
+    const mappingsPath = path.join(__dirname, '..', 'config.json');
+    
+    if (!fs.existsSync(mappingsPath)) {
+      console.error('config.json file not found. Please create one in the project root.');
+      return {};
+    }
+    
     const mappingsData = fs.readFileSync(mappingsPath, 'utf8');
-    return JSON.parse(mappingsData);
+    const parsedMappings = JSON.parse(mappingsData);
+    
+    // Validate the structure
+    for (const [workflowId, config] of Object.entries(parsedMappings)) {
+      if (typeof config !== 'object' || config === null) {
+        console.error(`Invalid configuration for workflow "${workflowId}". Expected object, got ${typeof config}.`);
+        return {};
+      }
+      
+      const workflowConfig = config as any;
+      if (!workflowConfig.OPENAI_API_HOST || typeof workflowConfig.PORT !== 'number') {
+        console.error(`Invalid configuration for workflow "${workflowId}". Missing required fields: OPENAI_API_HOST, PORT.`);
+        return {};
+      }
+    }
+    
+    return parsedMappings;
   } catch (error) {
-    console.error('Error loading mappings.json:', error);
+    console.error('Error loading config.json:', error);
     return {};
   }
 };
 
 // Create an Express app with workflow-specific routing
-const createApp = (workflowId: string): Application => {
+const createApp = (workflowId: string, config: WorkflowConfig): Application => {
   const app: Application = express();
   
   // Middleware
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // Setup routes
-  setupRoutes(app, workflowId);
+  // Setup routes with workflow-specific configuration
+  setupRoutes(app, workflowId, config);
 
   return app;
 };
@@ -39,38 +57,46 @@ const startServers = () => {
   const mappings = loadMappings();
 
   if (Object.keys(mappings).length === 0) {
-    console.warn('No mappings found in mappings.json. Starting default server on port 3000.');
-    // Start default server
-    const defaultApp = createApp('default');
-    const defaultServer = defaultApp.listen(3000, () => {
-      console.log('='.repeat(60));
-      console.log('Default OpenAI Proxy Server is running on port 3000');
-      console.log(`Forwarding requests to: ${OPENAI_API_BASE_URL}`);
-      console.log('Default workflow_id: default');
-      console.log('='.repeat(60));
-    });
-    
-    setupErrorHandling(defaultServer, 3000);
-    return;
+    console.error('No mappings found in config.json. Please create a config.json file with your workflow configurations.');
+    console.error('Example config.json structure:');
+    console.error(JSON.stringify({
+      "default": {
+        "OPENAI_API_HOST": "http://localhost:11434",
+        "OPENAI_API_KEY": "",
+        "PORT": 3000
+      },
+      "my_workflow": {
+        "OPENAI_API_HOST": "http://localhost:11434",
+        "OPENAI_API_KEY": "your-api-key",
+        "PORT": 3001
+      }
+    }, null, 2));
+    process.exit(1);
   }
 
-  console.log('Starting servers based on mappings.json:');
-  console.log(JSON.stringify(mappings, null, 2));
+  // Start a server for each workflow in the mappings
+  Object.entries(mappings).forEach(([workflowId, config]) => {
+    // Validate configuration
+    if (!config.OPENAI_API_HOST || typeof config.PORT !== 'number') {
+      console.error(`Invalid configuration for workflow "${workflowId}". Missing OPENAI_API_HOST or PORT.`);
+      process.exit(1);
+    }
 
-  // Start a server for each port in the mappings
-  Object.entries(mappings).forEach(([workflowId, port]) => {
-    const app = createApp(workflowId);
+    const app = createApp(workflowId, config);
     
-    const server = app.listen(port, () => {
-      console.log('='.repeat(60));
-      console.log(`OpenAI Proxy Server is running on port ${port}`);
+    const server = app.listen(config.PORT, () => {
+      console.log(`OpenAI Proxy Server is running on port ${config.PORT}`);
       console.log(`Workflow ID: ${workflowId}`);
-      console.log(`Forwarding requests to: ${OPENAI_API_BASE_URL}`);
+      console.log(`Forwarding requests to: ${config.OPENAI_API_HOST}`);
+      console.log(`API Key: ${config.OPENAI_API_KEY ? '***configured***' : 'not set'}`);
       console.log('='.repeat(60));
     });
 
-    setupErrorHandling(server, port);
+    setupErrorHandling(server, config.PORT);
   });
+
+  console.log(`\nStarted ${Object.keys(mappings).length} server(s) successfully!`);
+  console.log('='.repeat(60));
 };
 
 // Setup error handling for a server

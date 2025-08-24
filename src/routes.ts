@@ -1,11 +1,7 @@
 import { Application, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
-
-// Load environment variables from ../.env if not found
-dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
-const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com';
+import { WorkflowConfig } from './types';
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, '..', 'data');
@@ -54,7 +50,7 @@ const logRequestResponse = (prompt: any, response: any, endpoint: string, workfl
 };
 
 // Completions route handler
-export const completionsHandler = (workflowId: string) => {
+export const completionsHandler = (workflowId: string, config: WorkflowConfig) => {
   return async (req: Request, res: Response) => {
     try {
       const requestBody = req.body;
@@ -66,7 +62,7 @@ export const completionsHandler = (workflowId: string) => {
       delete forwardBody.workflow_id;
       
       // Log the incoming request
-      console.log(`Proxying request to ${OPENAI_API_BASE_URL}/v1/completions for ${finalWorkflowId}`);
+      console.log(`Proxying request to ${config.OPENAI_API_HOST}/v1/completions for ${finalWorkflowId}`);
       
       // Forward request to OpenAI API
       const controller = new AbortController();
@@ -79,9 +75,14 @@ export const completionsHandler = (workflowId: string) => {
           forwardHeaders[key] = value;
         }
       });
+
+      // Add API key if configured
+      if (config.OPENAI_API_KEY) {
+        forwardHeaders['Authorization'] = `Bearer ${config.OPENAI_API_KEY}`;
+      }
       
       const response = await fetch(
-        `${OPENAI_API_BASE_URL}/v1/completions`,
+        `${config.OPENAI_API_HOST}/v1/completions`,
         {
           method: 'POST',
           headers: {
@@ -129,24 +130,28 @@ export const completionsHandler = (workflowId: string) => {
 };
 
 // Health check route handler
-export const healthHandler = (workflowId: string) => {
+export const healthHandler = (workflowId: string, config: WorkflowConfig) => {
   return (req: Request, res: Response) => {
     res.json({ 
       status: 'OK', 
       timestamp: new Date().toISOString(),
       service: 'OpenAI Proxy Service',
-      workflow_id: workflowId
+      workflow_id: workflowId,
+      api_host: config.OPENAI_API_HOST,
+      port: config.PORT
     });
   };
 };
 
 // Root route handler
-export const rootHandler = (workflowId: string) => {
+export const rootHandler = (workflowId: string, config: WorkflowConfig) => {
   return (req: Request, res: Response) => {
     res.json({
       service: 'OpenAI Proxy Service',
       description: 'Forwards requests to OpenAI API while logging prompts and responses',
       workflow_id: workflowId,
+      api_host: config.OPENAI_API_HOST,
+      port: config.PORT,
       endpoints: {
         'POST /v1/completions': 'Proxy for OpenAI chat completions',
         'GET /health': 'Health check',
@@ -157,8 +162,8 @@ export const rootHandler = (workflowId: string) => {
 };
 
 // Setup routes for an Express app
-export const setupRoutes = (app: Application, workflowId: string) => {
-  app.post('/v1/completions', completionsHandler(workflowId));
-  app.get('/health', healthHandler(workflowId));
-  app.get('/', rootHandler(workflowId));
+export const setupRoutes = (app: Application, workflowId: string, config: WorkflowConfig) => {
+  app.post('/v1/completions', completionsHandler(workflowId, config));
+  app.get('/health', healthHandler(workflowId, config));
+  app.get('/', rootHandler(workflowId, config));
 };

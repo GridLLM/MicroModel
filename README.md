@@ -13,7 +13,7 @@ cd MicroModel
 npm install
 ```
 
-2. Create `mappings.json` file (optional):
+2. Create `config.json` file (optional):
 ```json
 {
   "workflow_id_1": 3001,
@@ -35,20 +35,20 @@ PORT=36830
 npm run dev
 ```
 
-The server will automatically start multiple instances based on your `mappings.json`:
+The server will automatically start multiple instances based on your `config.json`:
 - Each port maps to a specific `workflow_id`
-- If no `mappings.json` exists, runs on port defined in the env
+- If no `config.json` exists, runs on port defined in the env
 
 ## Port-Based Workflow Mapping
 
-When you create a `mappings.json` file, MicroModel automatically:
+When you create a `config.json` file, MicroModel automatically:
 1. Starts multiple server instances - one for each port defined
 2. Auto-assigns workflow_id - based on which port receives the request
 3. Organizes data collection - each workflow gets its own data directory
 
 ### Example Setup
 
-With this `mappings.json`:
+With this `config.json`:
 ```json
 {
   "user_feedback": 3001,
