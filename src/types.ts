@@ -1,6 +1,6 @@
 export interface WorkflowConfig {
   OPENAI_API_HOST: string;
-  OPENAI_API_KEY: string;
+  API_KEY: string;
   PORT: number;
 }
 

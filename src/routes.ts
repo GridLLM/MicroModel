@@ -77,8 +77,8 @@ export const completionsHandler = (workflowId: string, config: WorkflowConfig) =
       });
 
       // Add API key if configured
-      if (config.OPENAI_API_KEY) {
-        forwardHeaders['Authorization'] = `Bearer ${config.OPENAI_API_KEY}`;
+      if (config.API_KEY) {
+        forwardHeaders['Authorization'] = `Bearer ${config.API_KEY}`;
       }
       
       const response = await fetch(
