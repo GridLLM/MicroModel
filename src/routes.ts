@@ -10,20 +10,31 @@ if (!fs.existsSync(dataDir)) {
 }
 
 // Logging utility
-const logRequestResponse = (prompt: any, response: any, endpoint: string, workflowId?: string) => {
+const logRequestResponse = (prompt: any, response: any, endpoint: string, workflowId?: string, priorMessages?: any[]) => {
   // Save to JSONL file in ChatML format
   try {
+    let messages: any[] = [];
+    
+    // If priorMessages are provided (for chat completions), include the full conversation
+    if (priorMessages && Array.isArray(priorMessages)) {
+      messages = [...priorMessages];
+    } else {
+      // For completions endpoint, create a user message from the prompt
+      messages.push({
+        role: "user",
+        content: prompt.prompt || JSON.stringify(prompt)
+      });
+    }
+    
+    // Add the assistant response
+    const assistantContent = response.choices?.[0]?.text || response.choices?.[0]?.message?.content || JSON.stringify(response);
+    messages.push({
+      role: "assistant",
+      content: assistantContent
+    });
+
     const chatMLEntry = {
-      messages: [
-        {
-          role: "user",
-          content: prompt.prompt || JSON.stringify(prompt)
-        },
-        {
-          role: "assistant", 
-          content: response.choices?.[0]?.text || response.choices?.[0]?.message?.content || JSON.stringify(response)
-        }
-      ],
+      messages: messages,
       timestamp: new Date().toISOString(),
       endpoint: endpoint,
       model: prompt.model || 'unknown',
@@ -62,52 +73,83 @@ const logRequestResponse = (prompt: any, response: any, endpoint: string, workfl
   }
 };
 
+// Utility function to prepare headers for forwarding
+const prepareForwardHeaders = (req: Request, config: WorkflowConfig): Record<string, string> => {
+  const forwardHeaders: Record<string, string> = {};
+  Object.entries(req.headers).forEach(([key, value]) => {
+    if (typeof value === 'string' && key.toLowerCase() !== 'host' && key.toLowerCase() !== 'content-length') {
+      forwardHeaders[key] = value;
+    }
+  });
+
+  // Add API key if configured
+  if (config.API_KEY) {
+    forwardHeaders['Authorization'] = `Bearer ${config.API_KEY}`;
+  }
+  
+  return forwardHeaders;
+};
+
+// Utility function to handle API request forwarding
+const forwardToOpenAI = async (url: string, body: any, headers: Record<string, string>) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
+// Utility function to handle errors
+const handleProxyError = (error: any, res: Response) => {
+  console.error('Error proxying request:', error.message);
+  
+  if (error.name === 'AbortError') {
+    res.status(408).json({ 
+      error: 'Request timeout',
+      message: 'Request timed out after 60 seconds'
+    });
+  } else {
+    res.status(500).json({ 
+      error: 'Internal proxy server error',
+      message: error.message 
+    });
+  }
+};
+
 // Completions route handler
 export const completionsHandler = (workflowId: string, config: WorkflowConfig) => {
   return async (req: Request, res: Response) => {
     try {
       const requestBody = req.body;
-      // Use the workflow_id from the port mapping, but allow override from request body
       const finalWorkflowId = requestBody.workflow_id || workflowId;
       
       // Remove workflow_id from request body before forwarding to API
       const forwardBody = { ...requestBody };
       delete forwardBody.workflow_id;
       
-      // Log the incoming request
       console.log(`Proxying request to ${config.OPENAI_API_HOST}/v1/completions for ${finalWorkflowId}`);
       
-      // Forward request to OpenAI API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
-      
-      // Prepare headers, filtering out problematic ones
-      const forwardHeaders: Record<string, string> = {};
-      Object.entries(req.headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && key.toLowerCase() !== 'host' && key.toLowerCase() !== 'content-length') {
-          forwardHeaders[key] = value;
-        }
-      });
-
-      // Add API key if configured
-      if (config.API_KEY) {
-        forwardHeaders['Authorization'] = `Bearer ${config.API_KEY}`;
-      }
-      
-      const response = await fetch(
+      const forwardHeaders = prepareForwardHeaders(req, config);
+      const response = await forwardToOpenAI(
         `${config.OPENAI_API_HOST}/v1/completions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...forwardHeaders
-          },
-          body: JSON.stringify(forwardBody),
-          signal: controller.signal
-        }
+        forwardBody,
+        forwardHeaders
       );
-      
-      clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -123,21 +165,49 @@ export const completionsHandler = (workflowId: string, config: WorkflowConfig) =
       res.status(response.status).json(responseData);
 
     } catch (error: any) {
-      console.error('Error proxying request:', error.message);
+      handleProxyError(error, res);
+    }
+  };
+};
+
+// Chat completions route handler
+export const chatCompletionsHandler = (workflowId: string, config: WorkflowConfig) => {
+  return async (req: Request, res: Response) => {
+    try {
+      const requestBody = req.body;
+      const finalWorkflowId = requestBody.workflow_id || workflowId;
       
-      if (error.name === 'AbortError') {
-        // Request was aborted due to timeout
-        res.status(408).json({ 
-          error: 'Request timeout',
-          message: 'Request timed out after 60 seconds'
-        });
-      } else {
-        // Internal server error
-        res.status(500).json({ 
-          error: 'Internal proxy server error',
-          message: error.message 
-        });
+      // Extract messages for logging
+      const requestMessages = requestBody.messages || [];
+      
+      // Remove workflow_id from request body before forwarding to API
+      const forwardBody = { ...requestBody };
+      delete forwardBody.workflow_id;
+      
+      console.log(`Proxying request to ${config.OPENAI_API_HOST}/v1/chat/completions for ${finalWorkflowId}`);
+      
+      const forwardHeaders = prepareForwardHeaders(req, config);
+      const response = await forwardToOpenAI(
+        `${config.OPENAI_API_HOST}/v1/chat/completions`,
+        forwardBody,
+        forwardHeaders
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        return res.status(response.status).json(errorData);
       }
+      
+      const responseData = await response.json();
+
+      // Log the prompt and response with workflow_id and prior messages
+      logRequestResponse(requestBody, responseData, '/v1/chat/completions', finalWorkflowId, requestMessages);
+
+      // Return the response to the client
+      res.status(response.status).json(responseData);
+
+    } catch (error: any) {
+      handleProxyError(error, res);
     }
   };
 };
@@ -166,7 +236,8 @@ export const rootHandler = (workflowId: string, config: WorkflowConfig) => {
       api_host: config.OPENAI_API_HOST,
       port: config.PORT,
       endpoints: {
-        'POST /v1/completions': 'Proxy for OpenAI chat completions',
+        'POST /v1/completions': 'Proxy for OpenAI completions',
+        'POST /v1/chat/completions': 'Proxy for OpenAI chat completions',
         'GET /health': 'Health check',
         'GET /': 'Service information'
       }
@@ -177,6 +248,7 @@ export const rootHandler = (workflowId: string, config: WorkflowConfig) => {
 // Setup routes for an Express app
 export const setupRoutes = (app: Application, workflowId: string, config: WorkflowConfig) => {
   app.post('/v1/completions', completionsHandler(workflowId, config));
+  app.post('/v1/chat/completions', chatCompletionsHandler(workflowId, config));
   app.get('/health', healthHandler(workflowId, config));
   app.get('/', rootHandler(workflowId, config));
 };
