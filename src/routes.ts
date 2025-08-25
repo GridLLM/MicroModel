@@ -73,52 +73,83 @@ const logRequestResponse = (prompt: any, response: any, endpoint: string, workfl
   }
 };
 
+// Utility function to prepare headers for forwarding
+const prepareForwardHeaders = (req: Request, config: WorkflowConfig): Record<string, string> => {
+  const forwardHeaders: Record<string, string> = {};
+  Object.entries(req.headers).forEach(([key, value]) => {
+    if (typeof value === 'string' && key.toLowerCase() !== 'host' && key.toLowerCase() !== 'content-length') {
+      forwardHeaders[key] = value;
+    }
+  });
+
+  // Add API key if configured
+  if (config.API_KEY) {
+    forwardHeaders['Authorization'] = `Bearer ${config.API_KEY}`;
+  }
+  
+  return forwardHeaders;
+};
+
+// Utility function to handle API request forwarding
+const forwardToOpenAI = async (url: string, body: any, headers: Record<string, string>) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
+// Utility function to handle errors
+const handleProxyError = (error: any, res: Response) => {
+  console.error('Error proxying request:', error.message);
+  
+  if (error.name === 'AbortError') {
+    res.status(408).json({ 
+      error: 'Request timeout',
+      message: 'Request timed out after 60 seconds'
+    });
+  } else {
+    res.status(500).json({ 
+      error: 'Internal proxy server error',
+      message: error.message 
+    });
+  }
+};
+
 // Completions route handler
 export const completionsHandler = (workflowId: string, config: WorkflowConfig) => {
   return async (req: Request, res: Response) => {
     try {
       const requestBody = req.body;
-      // Use the workflow_id from the port mapping, but allow override from request body
       const finalWorkflowId = requestBody.workflow_id || workflowId;
       
       // Remove workflow_id from request body before forwarding to API
       const forwardBody = { ...requestBody };
       delete forwardBody.workflow_id;
       
-      // Log the incoming request
       console.log(`Proxying request to ${config.OPENAI_API_HOST}/v1/completions for ${finalWorkflowId}`);
       
-      // Forward request to OpenAI API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
-      
-      // Prepare headers, filtering out problematic ones
-      const forwardHeaders: Record<string, string> = {};
-      Object.entries(req.headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && key.toLowerCase() !== 'host' && key.toLowerCase() !== 'content-length') {
-          forwardHeaders[key] = value;
-        }
-      });
-
-      // Add API key if configured
-      if (config.API_KEY) {
-        forwardHeaders['Authorization'] = `Bearer ${config.API_KEY}`;
-      }
-      
-      const response = await fetch(
+      const forwardHeaders = prepareForwardHeaders(req, config);
+      const response = await forwardToOpenAI(
         `${config.OPENAI_API_HOST}/v1/completions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...forwardHeaders
-          },
-          body: JSON.stringify(forwardBody),
-          signal: controller.signal
-        }
+        forwardBody,
+        forwardHeaders
       );
-      
-      clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -134,21 +165,7 @@ export const completionsHandler = (workflowId: string, config: WorkflowConfig) =
       res.status(response.status).json(responseData);
 
     } catch (error: any) {
-      console.error('Error proxying request:', error.message);
-      
-      if (error.name === 'AbortError') {
-        // Request was aborted due to timeout
-        res.status(408).json({ 
-          error: 'Request timeout',
-          message: 'Request timed out after 60 seconds'
-        });
-      } else {
-        // Internal server error
-        res.status(500).json({ 
-          error: 'Internal proxy server error',
-          message: error.message 
-        });
-      }
+      handleProxyError(error, res);
     }
   };
 };
@@ -158,7 +175,6 @@ export const chatCompletionsHandler = (workflowId: string, config: WorkflowConfi
   return async (req: Request, res: Response) => {
     try {
       const requestBody = req.body;
-      // Use the workflow_id from the port mapping, but allow override from request body
       const finalWorkflowId = requestBody.workflow_id || workflowId;
       
       // Extract messages for logging
@@ -168,40 +184,14 @@ export const chatCompletionsHandler = (workflowId: string, config: WorkflowConfi
       const forwardBody = { ...requestBody };
       delete forwardBody.workflow_id;
       
-      // Log the incoming request
       console.log(`Proxying request to ${config.OPENAI_API_HOST}/v1/chat/completions for ${finalWorkflowId}`);
       
-      // Forward request to OpenAI API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
-      
-      // Prepare headers, filtering out problematic ones
-      const forwardHeaders: Record<string, string> = {};
-      Object.entries(req.headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && key.toLowerCase() !== 'host' && key.toLowerCase() !== 'content-length') {
-          forwardHeaders[key] = value;
-        }
-      });
-
-      // Add API key if configured
-      if (config.API_KEY) {
-        forwardHeaders['Authorization'] = `Bearer ${config.API_KEY}`;
-      }
-      
-      const response = await fetch(
+      const forwardHeaders = prepareForwardHeaders(req, config);
+      const response = await forwardToOpenAI(
         `${config.OPENAI_API_HOST}/v1/chat/completions`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...forwardHeaders
-          },
-          body: JSON.stringify(forwardBody),
-          signal: controller.signal
-        }
+        forwardBody,
+        forwardHeaders
       );
-      
-      clearTimeout(timeoutId);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -217,21 +207,7 @@ export const chatCompletionsHandler = (workflowId: string, config: WorkflowConfi
       res.status(response.status).json(responseData);
 
     } catch (error: any) {
-      console.error('Error proxying request:', error.message);
-      
-      if (error.name === 'AbortError') {
-        // Request was aborted due to timeout
-        res.status(408).json({ 
-          error: 'Request timeout',
-          message: 'Request timed out after 60 seconds'
-        });
-      } else {
-        // Internal server error
-        res.status(500).json({ 
-          error: 'Internal proxy server error',
-          message: error.message 
-        });
-      }
+      handleProxyError(error, res);
     }
   };
 };
