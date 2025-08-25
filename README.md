@@ -3,7 +3,7 @@
 A simple proxy server that forwards OpenAI API requests and automatically saves conversations as training data in ChatML format. Now supports per-workflow configuration with individual API hosts, keys, and ports.
 
 > [!NOTE]  
-> Currently only supports the `/v1/completions` endpoint.
+> Supports both `/v1/completions` and `/v1/chat/completions` endpoints.
 
 ## Quick Start
 
@@ -57,7 +57,7 @@ You can configure different workflows to use different AI providers:
 
 ```json
 {
-  "local_llama": {
+  "ollama": {
     "OPENAI_API_HOST": "http://localhost:11434",
     "API_KEY": "",
     "PORT": 3001
@@ -83,12 +83,22 @@ The `model` and `workflow_id` will be saved to the ultimate JSONL file in their 
 Each port automatically uses its configured workflow ID. Simply send requests to the appropriate port:
 
 ```bash
-# Uses workflow_id: "local_llama" and forwards to localhost:11434
+# Uses workflow_id: "ollama" and forwards to localhost:11434
 curl -X POST http://localhost:3001/v1/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "llama2",
+    "model": "qwen3:14b",
     "prompt": "Tell me a story"
+  }'
+
+# Chat completions endpoint
+curl -X POST http://localhost:3001/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3:14b",
+    "messages": [
+      {"role": "user", "content": "Tell me a story"}
+    ]
   }'
 
 # Uses workflow_id: "openai_gpt" and forwards to OpenAI API
@@ -105,8 +115,19 @@ You can override the automatic workflow assignment by including `workflow_id` in
 
 ```json
 {
-  "model": "llama2",
+  "model": "qwen3:14b",
   "prompt": "Tell me a story",
+  "workflow_id": "custom_experiment"
+}
+```
+
+For chat completions:
+```json
+{
+  "model": "qwen3:14b",
+  "messages": [
+    {"role": "user", "content": "Tell me a story"}
+  ],
   "workflow_id": "custom_experiment"
 }
 ```
@@ -132,7 +153,7 @@ data/
 │   │   └── data.jsonl
 │   └── 26-08-2025/
 │       └── data.jsonl
-├── local_llama/
+├── ollama/
 │   ├── 24-08-2025/
 │   │   └── data.jsonl
 │   └── 25-08-2025/
@@ -151,8 +172,8 @@ Each saved conversation looks like:
   ],
   "timestamp": "2025-08-24T10:30:00.000Z",
   "endpoint": "/v1/completions",
-  "model": "llama2",
-  "workflow_id": "local_llama"
+  "model": "qwen3:14b",
+  "workflow_id": "ollama"
 }
 ```
 
@@ -163,6 +184,7 @@ This data can be used to easily fine tune a model using a platform like [unsloth
 ### Per-Workflow Endpoints
 Each configured workflow provides these endpoints:
 - `POST /v1/completions` - Proxy endpoint with automatic logging
+- `POST /v1/chat/completions` - Chat completions proxy endpoint with automatic logging
 - `GET /health` - Health check (shows workflow configuration)
 - `GET /` - Service info (shows workflow configuration)
 
@@ -172,7 +194,7 @@ Each configured workflow provides these endpoints:
   "status": "OK",
   "timestamp": "2025-08-24T10:30:00.000Z",
   "service": "OpenAI Proxy Service",
-  "workflow_id": "local_llama",
+  "workflow_id": "ollama",
   "api_host": "http://localhost:11434",
   "port": 3001
 }
