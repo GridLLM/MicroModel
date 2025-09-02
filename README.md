@@ -8,6 +8,7 @@ A simple proxy server that forwards OpenAI API requests and automatically saves 
 ## Quick Start
 
 1. Clone and install:
+
 ```bash
 git clone https://github.com/GridLLM/MicroModel.git
 cd MicroModel
@@ -15,6 +16,7 @@ npm install
 ```
 
 2. Create `config.json` file (required):
+
 ```json
 {
   "default": {
@@ -31,11 +33,13 @@ npm install
 ```
 
 3. Start the server:
+
 ```bash
 npm run dev
 ```
 
 The server will automatically start multiple instances based on your `config.json`:
+
 - Each instance will automatically save the prompt / response to the workflow defined in the config.json
 - Each workflow has its own port, API host, and API key
 - All configuration must be in `config.json`
@@ -45,6 +49,7 @@ The server will automatically start multiple instances based on your `config.jso
 Each workflow in `config.json` can have its own configuration:
 
 ### Configuration Fields
+
 - **OPENAI_API_HOST**: The API endpoint to forward requests to
 - **API_KEY**: The API key for authentication (optional)
 - **PORT**: The port number for this workflow's server
@@ -53,6 +58,7 @@ Each workflow in `config.json` can have its own configuration:
 > If you are using Ollama / vLLM to generate your responses, you do not need to define an API_KEY
 
 ### Multi-Provider Support
+
 You can configure different workflows to use different AI providers:
 
 ```json
@@ -80,6 +86,7 @@ The `model` and `workflow_id` will be saved to the ultimate JSONL file in their 
 ## Usage
 
 ### Automatic Workflow Assignment
+
 Each port automatically uses its configured workflow ID. Simply send requests to the appropriate port:
 
 ```bash
@@ -111,6 +118,7 @@ curl -X POST http://localhost:3002/v1/completions \
 ```
 
 ### Manual Workflow Override
+
 You can override the automatic workflow assignment by including `workflow_id` in the request body:
 
 ```json
@@ -122,12 +130,11 @@ You can override the automatic workflow assignment by including `workflow_id` in
 ```
 
 For chat completions:
+
 ```json
 {
   "model": "qwen3:14b",
-  "messages": [
-    {"role": "user", "content": "Tell me a story"}
-  ],
+  "messages": [{ "role": "user", "content": "Tell me a story" }],
   "workflow_id": "custom_experiment"
 }
 ```
@@ -138,12 +145,15 @@ For chat completions:
 ## Data Collection
 
 Conversations are automatically saved in ChatML format with automatic date-based organization:
+
 - Location: `data/${workflow_id}/${dd-mm-yyyy}/data.jsonl`
 - Each workflow gets its own data directory
 - Each day gets its own subfolder in DD-MM-YYYY format
 
 ### Folder Structure
+
 The system automatically creates a date-based folder structure for easy data aggregation:
+
 ```
 data/
 ├── custom_workflow/
@@ -164,11 +174,12 @@ data/
 ```
 
 Each saved conversation looks like:
+
 ```json
 {
   "messages": [
-    {"role": "user", "content": "Tell me a story"},
-    {"role": "assistant", "content": "Once upon a time..."}
+    { "role": "user", "content": "Tell me a story" },
+    { "role": "assistant", "content": "Once upon a time..." }
   ],
   "timestamp": "2025-08-24T10:30:00.000Z",
   "endpoint": "/v1/completions",
@@ -182,13 +193,16 @@ This data can be used to easily fine tune a model using a platform like [unsloth
 ## API Endpoints
 
 ### Per-Workflow Endpoints
+
 Each configured workflow provides these endpoints:
+
 - `POST /v1/completions` - Proxy endpoint with automatic logging
 - `POST /v1/chat/completions` - Chat completions proxy endpoint with automatic logging
 - `GET /health` - Health check (shows workflow configuration)
 - `GET /` - Service info (shows workflow configuration)
 
 ### Health Check Response
+
 ```json
 {
   "status": "OK",
@@ -203,24 +217,28 @@ Each configured workflow provides these endpoints:
 ## Configuration Reference
 
 ### config.json Structure
+
 ```json
 {
   "workflow_name": {
     "OPENAI_API_HOST": "string (required) - API endpoint URL",
-    "API_KEY": "string (optional) - API key for authentication", 
+    "API_KEY": "string (optional) - API key for authentication",
     "PORT": "number (required) - Port for this workflow's server"
   }
 }
 ```
 
 ### Validation
+
 The system validates that:
+
 - `config.json` file exists
 - Each workflow has required `OPENAI_API_HOST` and `PORT` fields
 - Port numbers are valid integers
 - No port conflicts between workflows
 
 ## Error Handling
+
 - Missing `config.json`: Server exits with configuration example
 - Invalid configuration: Server exits with specific error message
 - API request failures: Forwarded to client with original status codes
