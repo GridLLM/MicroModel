@@ -1,11 +1,9 @@
-export function create10kPrompt() {
-  const ADDITIONAL_CONTEXT = "";
-
+export function create10kPrompt(tenKText: string) {
   return `
 
 Extract the following basic information from the provided 10-K filing and present it in a structured format:
 
-${ADDITIONAL_CONTEXT}
+${tenKText}
 
 **Company Overview:**
 - Company name and ticker symbol
