@@ -7,3 +7,7 @@ export interface WorkflowConfig {
 export interface WorkflowMappings {
   [workflowId: string]: WorkflowConfig;
 }
+
+export interface WorkflowResult {
+  
+}
